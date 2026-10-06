@@ -181,3 +181,4 @@ func initProfiling(service, version string) {
 	}
 	log.Warn("could not initialize Stackdriver profiler after retrying, giving up")
 }
+// ci-test: verifying path-based build
