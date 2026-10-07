@@ -1,4 +1,3 @@
-```groovy
 def SERVICES = [
   frontend:              [dir: 'src/frontend',              test: 'go'],
   checkoutservice:       [dir: 'src/checkoutservice',       test: 'go'],
@@ -255,4 +254,3 @@ pipeline {
     }
   }
 }
-```
