@@ -23,5 +23,17 @@
     "@opentelemetry/sdk-node": "0.222.0",
     "pino": "10.3.1",
     "xml2js": "0.6.2"
+  },
+  "overrides": {
+    " @grpc/grpc-js": "^1.14.5",
+    "brace-expansion": "^1.1.20",
+    "form-data": "^2.5.6",
+    "linkify-it": "^5.0.2",
+    "lodash": "^4.18.0",
+    "minimatch": "^3.1.4",
+    "protobufjs": "^7.6.1",
+    "tmp": "^0.2.6",
+    "underscore": "^1.13.8"
   }
+  
 }

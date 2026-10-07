@@ -19,10 +19,10 @@ def ENABLED = [
   'shippingservice',
   // 'currencyservice',
   // 'paymentservice',
-  'emailservice',
-  'recommendationservice',
-  'adservice',
-  'cartservice'
+  // 'emailservice',
+  // 'recommendationservice',
+  // 'adservice',
+  // 'cartservice'
 ]
 
 pipeline {
