@@ -13,16 +13,16 @@ def SERVICES = [
 
 // All services enabled
 def ENABLED = [
-  'frontend',
-  'checkoutservice',
-  'productcatalogservice',
-  'shippingservice',
+  // 'frontend',
+  // 'checkoutservice',
+  // 'productcatalogservice',
+  // 'shippingservice',
   // 'currencyservice',
   // 'paymentservice',
   // 'emailservice',
   // 'recommendationservice',
-  // 'adservice',
-  // 'cartservice'
+    'adservice',
+    'cartservice'
 ]
 
 pipeline {

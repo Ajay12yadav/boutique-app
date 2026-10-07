@@ -8,32 +8,25 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@google-cloud/profiler": "8.0.1",
-    "@google-cloud/trace-agent": "8.0.0",
-    "@grpc/grpc-js": "1.14.4",
-    "@grpc/proto-loader": "0.8.1",
-    "async": "3.2.6",
-    "google-protobuf": "4.0.2",
-    "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-otlp-grpc": "0.26.0",
-    "@opentelemetry/instrumentation-grpc": "0.222.0",
-    "@opentelemetry/resources": "2.11.0",
-    "@opentelemetry/semantic-conventions": "1.43.0",
-    "@opentelemetry/sdk-trace-base": "2.11.0",
-    "@opentelemetry/sdk-node": "0.222.0",
-    "pino": "10.3.1",
-    "xml2js": "0.6.2"
+    "@google-cloud/profiler": "^8.1.0",
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.7.15",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.57.2",
+    "@opentelemetry/instrumentation-grpc": "^0.57.2",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-node": "^0.57.2",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
+    "async": "^3.2.6",
+    "google-protobuf": "^3.21.4",
+    "pino": "^9.6.0",
+    "xml2js": "^0.6.2"
   },
   "overrides": {
-    " @grpc/grpc-js": "^1.14.5",
-    "brace-expansion": "^1.1.20",
-    "form-data": "^2.5.6",
-    "linkify-it": "^5.0.2",
-    "lodash": "^4.18.0",
-    "minimatch": "^3.1.4",
-    "protobufjs": "^7.6.1",
-    "tmp": "^0.2.6",
-    "underscore": "^1.13.8"
+    "@opentelemetry/core": "^1.30.0",
+    "uuid": "^11.1.1",
+    "protobufjs": "^7.4.0",
+    "lodash": "^4.17.21",
+    "tmp": "^0.2.3"
   }
-  
 }
