@@ -18,8 +18,8 @@ def ENABLED = [
   // 'productcatalogservice',
   // 'shippingservice',
     'currencyservice',
-    'paymentservice',
-    'emailservice',
+    // 'paymentservice',
+    // 'emailservice',
     // 'recommendationservice',
     // 'adservice',
     // 'cartservice'
