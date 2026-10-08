@@ -17,10 +17,10 @@ def ENABLED = [
   // 'checkoutservice',
   // 'productcatalogservice',
   // 'shippingservice',
-    'currencyservice',
-    // 'paymentservice',
-    // 'emailservice',
-    // 'recommendationservice',
+    // 'currencyservice',
+     'paymentservice',
+     'emailservice',
+     'recommendationservice',
     // 'adservice',
     // 'cartservice'
 ]

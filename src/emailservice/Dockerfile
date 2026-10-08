@@ -26,6 +26,7 @@ RUN apk update \
     && apk add --no-cache g++ linux-headers \
     && rm -rf /var/cache/apk/*
 RUN apk upgrade --no-cache
+
 # get packages
 COPY requirements.txt .
 RUN pip install -r requirements.txt
@@ -41,6 +42,7 @@ ENV ENABLE_PROFILER=1
 RUN apk update \
     && apk add --no-cache libstdc++ \
     && rm -rf /var/cache/apk/*
+RUN apk upgrade --no-cache
 
 WORKDIR /email_server
 
