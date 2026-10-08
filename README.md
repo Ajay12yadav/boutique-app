@@ -1,170 +1,161 @@
-<!-- <p align="center">
-<img src="/src/frontend/static/icons/Hipster_HeroLogoMaroon.svg" width="300" alt="Online Boutique" />
-</p> -->
-![Continuous Integration](https://github.com/GoogleCloudPlatform/microservices-demo/workflows/Continuous%20Integration%20-%20Main/Release/badge.svg)
+Production-Style CI/CD and GitOps Pipeline for a Microservices App
 
-**Online Boutique** is a cloud-first microservices demo application.  The application is a
-web-based e-commerce app where users can browse items, add them to the cart, and purchase them.
+A DevSecOps pipeline built around Google's Online Boutique demo (10 microservices in Go, Java, C#, Node.js and Python). The application code is upstream. The work in this project is everything around it: the Jenkins CI pipeline, security gates, container registry, Kubernetes manifests, and GitOps delivery with ArgoCD.
 
-Google uses this application to demonstrate how developers can modernize enterprise applications using Google Cloud products, including: [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine), [Cloud Service Mesh (CSM)](https://cloud.google.com/service-mesh), [gRPC](https://grpc.io/), [Cloud Operations](https://cloud.google.com/products/operations), [Spanner](https://cloud.google.com/spanner), [Memorystore](https://cloud.google.com/memorystore), [AlloyDB](https://cloud.google.com/alloydb), and [Gemini](https://ai.google.dev/). This application works on any Kubernetes cluster.
+Forked from GoogleCloudPlatform/microservices-demo. Application logic is unchanged. Changes are limited to Dockerfiles, dependency/base-image fixes, and the files listed under "What I added".
 
-If you’re using this demo, please **★Star** this repository to show your interest!
+Architecture
+Developer ──push──> GitHub (boutique-app)
+                        │
+                        ▼
+                 Jenkins (Multibranch Pipeline, JCasC)
+                   1. Detect changed services (git diff, path-based)
+                   2. Gitleaks secret scan
+                   3. Unit tests (Go services)
+                   4. Docker build
+                   5. Trivy scan: OS packages (blocks) + libraries (policy-based)
+                   6. Push image to GHCR, tagged with the 7-char commit SHA
+                        │
+                        ▼
+                 GHCR (ghcr.io/ajay12yadav/<service>:<sha>)
+                        │
+                        ▼
+        GitHub (boutique-gitops): Kustomize base + overlays/dev
+                        │
+                        ▼
+                 ArgoCD (watches the repo)
+                        │
+                        ▼
+              Kubernetes (kind) namespace: boutique-dev
 
-**Note to Googlers:** Please fill out the form at [go/microservices-demo](http://go/microservices-demo).
+Jenkins only does CI. It never runs kubectl against the cluster. ArgoCD pulls the desired state from Git and applies it.
 
-## Architecture
+Repositories
+Repo	Purpose
+boutique-app (this repo)	Application source, Dockerfiles, Jenkinsfile, docker-compose.yml
+boutique-gitops	Kubernetes manifests (Kustomize) and ArgoCD Application definitions
+jenkins-infra	Jenkins in Docker, plugins list, and Jenkins Configuration as Code (JCasC)
+Tech stack
+Area	Tools
+CI	Jenkins (declarative pipeline, multibranch, JCasC)
+Containers	Docker, Docker Compose, multi-stage builds
+Security	Gitleaks (secrets), Trivy (OS and library vulnerabilities)
+Registry	GitHub Container Registry (GHCR)
+Orchestration	Kubernetes (kind), Kustomize
+CD	ArgoCD (GitOps)
+Local environment	WSL2, 8.7 GB RAM
+Services
+Service	Language	Tests in pipeline	Library scan policy
+frontend	Go	go test	enforce
+checkoutservice	Go	go test	enforce
+productcatalogservice	Go	go test	enforce
+shippingservice	Go	go test	enforce
+currencyservice	Node.js	none yet	report
+paymentservice	Node.js	none yet	report
+emailservice	Python	none yet	report
+recommendationservice	Python	none yet	report
+adservice	Java	none yet	report
+cartservice	C#	none yet	report
 
-**Online Boutique** is composed of 11 microservices written in different
-languages that talk to each other over gRPC.
+redis-cart runs as a plain redis:alpine deployment.
 
-[![Architecture of
-microservices](/docs/img/architecture-diagram.png)](/docs/img/architecture-diagram.png)
+What the pipeline does
+1. Path-based builds (monorepo)
 
-Find **Protocol Buffers Descriptions** at the [`./protos` directory](/protos).
+The Detect changes stage runs git diff --name-only against the last successful build and builds only the services whose folders changed. It falls back to building everything when:
 
-| Service                                              | Language      | Description                                                                                                                       |
-| ---------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [frontend](/src/frontend)                           | Go            | Exposes an HTTP server to serve the website. Does not require signup/login and generates session IDs for all users automatically. |
-| [cartservice](/src/cartservice)                     | C#            | Stores the items in the user's shopping cart in Redis and retrieves it.                                                           |
-| [productcatalogservice](/src/productcatalogservice) | Go            | Provides the list of products from a JSON file and ability to search products and get individual products.                        |
-| [currencyservice](/src/currencyservice)             | Node.js       | Converts one money amount to another currency. Uses real values fetched from European Central Bank. It's the highest QPS service. |
-| [paymentservice](/src/paymentservice)               | Node.js       | Charges the given credit card info (mock) with the given amount and returns a transaction ID.                                     |
-| [shippingservice](/src/shippingservice)             | Go            | Gives shipping cost estimates based on the shopping cart. Ships items to the given address (mock)                                 |
-| [emailservice](/src/emailservice)                   | Python        | Sends users an order confirmation email (mock).                                                                                   |
-| [checkoutservice](/src/checkoutservice)             | Go            | Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.                            |
-| [recommendationservice](/src/recommendationservice) | Python        | Recommends other products based on what's given in the cart.                                                                      |
-| [adservice](/src/adservice)                         | Java          | Provides text ads based on given context words.                                                                                   |
-| [loadgenerator](/src/loadgenerator)                 | Python/Locust | Continuously sends requests imitating realistic user shopping flows to the frontend.                                              |
+there is no previous successful build,
+the diff fails,
+the Jenkinsfile itself changed,
+the BUILD_ALL parameter is ticked.
 
-## Screenshots
+A docs-only commit builds nothing.
 
-| Home Page                                                                                                         | Checkout Screen                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [![Screenshot of store homepage](/docs/img/online-boutique-frontend-1.png)](/docs/img/online-boutique-frontend-1.png) | [![Screenshot of checkout screen](/docs/img/online-boutique-frontend-2.png)](/docs/img/online-boutique-frontend-2.png) |
+2. Security gates
+Gitleaks scans the workspace for committed secrets.
+Trivy runs two scans per image:
+OS packages (base image): always blocks the build on fixable HIGH/CRITICAL findings.
+Application libraries (npm, pip, etc.): blocks for services set to enforce. For upstream demo services set to report, findings are printed but do not fail the build (see "Security exceptions").
+Trivy's vulnerability database is cached in a Docker volume (trivy-cache) and scans use --skip-db-update, so builds do not depend on a slow network.
+3. Registry and tagging
 
-## Quickstart (GKE)
+Images are pushed to GHCR only from the main branch, tagged with the 7-character commit SHA. Registry credentials come from the Jenkins credential store and are never printed to the log (single-quoted sh blocks, docker logout after push).
 
-1. Ensure you have the following requirements:
-   - [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project).
-   - Shell environment with `gcloud`, `git`, and `kubectl`.
+4. GitOps delivery
 
-2. Clone the latest major version.
+Image tags live in boutique-gitops/overlays/dev/kustomization.yaml. ArgoCD watches that repo with automated sync, prune and selfHeal enabled. Changing a tag in Git is how a new version is deployed, and git revert is how it is rolled back.
 
-   ```sh
-   git clone --depth 1 --branch v0 https://github.com/GoogleCloudPlatform/microservices-demo.git
-   cd microservices-demo/
-   ```
+Run it locally
+Docker Compose (no Kubernetes)
+bash
+git clone https://github.com/Ajay12yadav/boutique-app.git
+cd boutique-app
+docker compose up -d --build
+# open http://localhost:8080
+docker compose down
+Jenkins
+bash
+cd jenkins-infra
+cp .env.example .env        # set JENKINS_ADMIN_PASSWORD and DOCKER_GID
+docker compose up -d --build
+# open http://localhost:8090
 
-   The `--depth 1` argument skips downloading git history.
+Jenkins is configured from casc/jenkins.yaml, so the setup is reproducible. Credentials (github-pat, ghcr-creds) are added through the Jenkins credentials store.
 
-3. Set the Google Cloud project and region and ensure the Google Kubernetes Engine API is enabled.
+Kubernetes and ArgoCD
+bash
+kind create cluster --name boutique
+kubectl config current-context          # must print kind-boutique
 
-   ```sh
-   export PROJECT_ID=<PROJECT_ID>
-   export REGION=us-central1
-   gcloud services enable container.googleapis.com \
-     --project=${PROJECT_ID}
-   ```
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-   Substitute `<PROJECT_ID>` with the ID of your Google Cloud project.
+kubectl apply -f argocd/dev-app.yaml    # from the boutique-gitops repo
+kubectl port-forward -n boutique-dev svc/frontend 8080:80
+Security exceptions
+Service	Finding	Why accepted	Revisit
+currencyservice, paymentservice and other upstream-dependency services	HIGH/CRITICAL npm findings in transitive dependencies (for example protobufjs, lodash)	Upstream demo code. Most vulnerable packages come in through the profiler and tracing libraries, which are disabled in this deployment. Overriding them risked breaking the services.	Before any real-world use
 
-4. Create a GKE cluster and get the credentials for it.
+The library scan still runs and prints these findings on every build, so nothing is hidden. OS-level findings are never excepted.
 
-   ```sh
-   gcloud container clusters create-auto online-boutique \
-     --project=${PROJECT_ID} --region=${REGION} \
-     --labels dev-tutorial=online-boutique
-   ```
+Problems I diagnosed and fixed
+Problem	Symptom	Cause	Fix
+Compose file not found	no configuration file provided	File was named Docker-Compose.yaml, and Linux is case-sensitive	Renamed to docker-compose.yml
+npm install timeout	ETIMEDOUT in node-gyp for paymentservice and currencyservice	The optional pprof profiler tried to compile and download Node headers	Disabled the profiler, changed install to npm install --omit=dev --ignore-scripts
+Frontend crash loop	panic: environment variable "SHOPPING_ASSISTANT_SERVICE_ADDR" not set	Upstream frontend requires a new variable at startup	Added the variable to the Compose file and manifests
+Jenkinsfile would not parse	unexpected char: ''`	Markdown code fences were copied into the file	Removed the fence lines
+go test failed on checkoutservice	non-constant format string in call to status.Errorf	Stricter go vet in newer Go versions	Used a constant format string in the call
+Trivy database download stalled	Scan hung at 0.17% of the 120 MB DB download	Every scan started with an empty cache	Persistent trivy-cache volume and --skip-db-update
+Trivy blocked on OpenSSL	libcrypto3/libssl3 HIGH CVE on Alpine, OpenSSL HIGH CVE on Ubuntu	Pinned base images lagged behind patched packages	Upgraded OS packages in the runtime stage, or moved to a patched base tag
+ImagePullBackOff on Kubernetes	not found for the image tag	Kustomize had no newTag, and the tag used did not exist in GHCR	Per-service tags taken from the real GHCR tag list
+CrashLoopBackOff on Python services	Liveness probe failed ... within 1s, exit code 137	Probe timeout and delay too strict for a busy node	Longer timeoutSeconds/initialDelaySeconds and a startupProbe
+Project status
+Stage	Status
+Containerize all services, run with Docker Compose	Done
+Jenkins in Docker with JCasC	Done
+Multibranch pipeline, path-based builds, Gitleaks, Trivy, GHCR push	Done
+Kubernetes manifests with Kustomize on kind	Done
+ArgoCD GitOps with automated sync, prune and self-heal	Done
+Jenkins stage that commits new image tags to the GitOps repo	Planned
+GitHub webhook trigger (ngrok)	Planned
+Jenkins Shared Library	Planned
+dev / staging / prod promotion with manual approval	Planned
+Argo Rollouts canary with Prometheus-based rollback	Planned
+Prometheus, Grafana and alerting	Planned
+SonarQube quality gate	Planned
+Cosign image signing, Kyverno policies, k6 load test	Planned
+Terraform for cloud infrastructure	Planned
+What I added to the upstream project
+Jenkinsfile (path-based multi-service pipeline)
+docker-compose.yml (local environment for all services)
+Dockerfile fixes for paymentservice, currencyservice, cartservice and other services where Trivy found OS-level issues
+docs/service-inventory.md (language, port, Dockerfile path and test method per service)
+Companion repos boutique-gitops and jenkins-infra
+Screenshots
 
-   Creating the cluster may take a few minutes.
 
-5. Deploy Online Boutique to the cluster.
 
-   ```sh
-   kubectl apply -f ./release/kubernetes-manifests.yaml
-   ```
 
-6. Wait for the pods to be ready.
-
-   ```sh
-   kubectl get pods
-   ```
-
-   After a few minutes, you should see the Pods in a `Running` state:
-
-   ```
-   NAME                                     READY   STATUS    RESTARTS   AGE
-   adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
-   cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
-   checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
-   currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
-   emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
-   frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
-   loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
-   paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
-   productcatalogservice-557d474574-888kr   1/1     Running   0          3m
-   recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
-   redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
-   shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
-   ```
-
-7. Access the web frontend in a browser using the frontend's external IP.
-
-   ```sh
-   kubectl get service frontend-external | awk '{print $4}'
-   ```
-
-   Visit `http://EXTERNAL_IP` in a web browser to access your instance of Online Boutique.
-
-8. Congrats! You've deployed the default Online Boutique. To deploy a different variation of Online Boutique (e.g., with Google Cloud Operations tracing, Istio, etc.), see [Deploy Online Boutique variations with Kustomize](#deploy-online-boutique-variations-with-kustomize).
-
-9. Once you are done with it, delete the GKE cluster.
-
-   ```sh
-   gcloud container clusters delete online-boutique \
-     --project=${PROJECT_ID} --region=${REGION}
-   ```
-
-   Deleting the cluster may take a few minutes.
-
-## Additional deployment options
-
-- **Terraform**: [See these instructions](/terraform) to learn how to deploy Online Boutique using [Terraform](https://www.terraform.io/intro).
-- **Istio / Cloud Service Mesh**: [See these instructions](/kustomize/components/service-mesh-istio/README.md) to deploy Online Boutique alongside an Istio-backed service mesh.
-- **Non-GKE clusters (Minikube, Kind, etc)**: See the [Development guide](/docs/development-guide.md) to learn how you can deploy Online Boutique on non-GKE clusters.
-- **AI assistant using Gemini**: [See these instructions](/kustomize/components/shopping-assistant/README.md) to deploy a Gemini-powered AI assistant that suggests products to purchase based on an image.
-- **And more**: The [`/kustomize` directory](/kustomize) contains instructions for customizing the deployment of Online Boutique with other variations.
-
-## Documentation
-
-- [Development](/docs/development-guide.md) to learn how to run and develop this app locally.
-
-## Demos featuring Online Boutique
-
-- [Security hardening of the OnlineBoutique sample apps with the Docker Hardened Images (DHI)](https://medium.com/google-cloud/security-hardening-of-the-onlineboutique-sample-apps-with-docker-hardened-images-dhi-ca1fad348343)
-- [alpine, distroless or scratch?](https://medium.com/google-cloud/alpine-distroless-or-scratch-caac35250e0b)
-- [Platform Engineering in action: Deploy the Online Boutique sample apps with Score and Humanitec](https://medium.com/p/d99101001e69)
-- [The new Kubernetes Gateway API with Istio and Anthos Service Mesh (ASM)](https://medium.com/p/9d64c7009cd)
-- [Use Azure Redis Cache with the Online Boutique sample on AKS](https://medium.com/p/981bd98b53f8)
-- [Sail Sharp, 8 tips to optimize and secure your .NET containers for Kubernetes](https://medium.com/p/c68ba253844a)
-- [Deploy multi-region application with Anthos and Google cloud Spanner](https://medium.com/google-cloud/a2ea3493ed0)
-- [Use Google Cloud Memorystore (Redis) with the Online Boutique sample on GKE](https://medium.com/p/82f7879a900d)
-- [Use Helm to simplify the deployment of Online Boutique, with a Service Mesh, GitOps, and more!](https://medium.com/p/246119e46d53)
-- [How to reduce microservices complexity with Apigee and Anthos Service Mesh](https://cloud.google.com/blog/products/application-modernization/api-management-and-service-mesh-go-together)
-- [gRPC health probes with Kubernetes 1.24+](https://medium.com/p/b5bd26253a4c)
-- [Use Google Cloud Spanner with the Online Boutique sample](https://medium.com/p/f7248e077339)
-- [Seamlessly encrypt traffic from any apps in your Mesh to Memorystore (redis)](https://medium.com/google-cloud/64b71969318d)
-- [Strengthen your app's security with Cloud Service Mesh and Anthos Config Management](https://cloud.google.com/service-mesh/docs/strengthen-app-security)
-- [From edge to mesh: Exposing service mesh applications through GKE Ingress](https://cloud.google.com/architecture/exposing-service-mesh-apps-through-gke-ingress)
-- [Take the first step toward SRE with Cloud Operations Sandbox](https://cloud.google.com/blog/products/operations/on-the-road-to-sre-with-cloud-operations-sandbox)
-- [Deploying the Online Boutique sample application on Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/onlineboutique-install-kpt)
-- [Anthos Service Mesh Workshop: Lab Guide](https://codelabs.developers.google.com/codelabs/anthos-service-mesh-workshop)
-- [KubeCon EU 2019 - Reinventing Networking: A Deep Dive into Istio's Multicluster Gateways - Steve Dake, Independent](https://youtu.be/-t2BfT59zJA?t=982)
-- Google Cloud Next'18 SF
-  - [Day 1 Keynote](https://youtu.be/vJ9OaAqfxo4?t=2416) showing GKE On-Prem
-  - [Day 3 Keynote](https://youtu.be/JQPOPV_VH5w?t=815) showing Stackdriver
-    APM (Tracing, Code Search, Profiler, Google Cloud Build)
-  - [Introduction to Service Management with Istio](https://www.youtube.com/watch?v=wCJrdKdD6UM&feature=youtu.be&t=586)
-- [Google Cloud Next'18 London – Keynote](https://youtu.be/nIq2pkNcfEI?t=3071)
+Application code is licensed under Apache 2.0 by Google LLC (see upstream). Additions in this repository are provided for learning purposes.
   showing Stackdriver Incident Response Management
 - [Microservices demo showcasing Go Micro](https://github.com/go-micro/demo)
