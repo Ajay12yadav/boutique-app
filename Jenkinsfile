@@ -17,12 +17,12 @@ def ENABLED = [
   // 'checkoutservice',
   // 'productcatalogservice',
   // 'shippingservice',
-    // 'currencyservice',
-    //  'paymentservice',
-    //  'emailservice',
-    //  'recommendationservice',
-    //  'adservice',
-      'cartservice'
+  // 'currencyservice',
+  // 'paymentservice',
+  // 'emailservice',
+  // 'recommendationservice',
+  // 'adservice',
+  'cartservice'
 ]
 
 pipeline {
@@ -194,8 +194,6 @@ pipeline {
 
               sh "${trivyBase} --pkg-types library --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code ${libExit} ${image}"
 
-              
-
               // -----------------------------
               // Push to GHCR
               // -----------------------------
@@ -218,6 +216,7 @@ pipeline {
                   '''
 
                   sh "docker push ${image}"
+                  env.PUSHED = (env.PUSHED ? env.PUSHED + ',' : '') + svc
 
                   sh '''
                     docker logout ghcr.io
@@ -229,6 +228,46 @@ pipeline {
         }
       }
     }
+
+    stage('Update GitOps repo') {
+      when {
+        allOf {
+          branch 'main'
+          expression { return env.PUSHED?.trim() }
+        }
+      }
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'gitops-pat',
+                                          usernameVariable: 'GH_USER',
+                                          passwordVariable: 'GH_TOKEN')]) {
+          sh '''
+            rm -rf gitops-tmp
+            git clone https://${GH_USER}:${GH_TOKEN}@github.com/Ajay12yadav/boutique-gitops.git gitops-tmp
+            cd gitops-tmp
+            git config user.name "jenkins-ci"
+            git config user.email "jenkins@localhost"
+          '''
+          script {
+            for (s in env.PUSHED.split(',')) {
+              sh """
+                cd gitops-tmp
+                sed -i '/name: ${s}\$/,/newTag:/ s/newTag: .*/newTag: "${env.TAG}"/' overlays/dev/kustomization.yaml
+              """
+            }
+          }
+          sh '''
+            cd gitops-tmp
+            git diff --stat
+            git commit -am "deploy(dev): ${PUSHED} -> ${TAG} (build ${BUILD_NUMBER})" || echo "nothing to commit"
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push origin main && break
+              sleep 3
+            done
+          '''
+        }
+      }
+    }
+
   }
 
   post {
