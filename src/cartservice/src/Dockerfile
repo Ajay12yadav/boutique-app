@@ -32,8 +32,16 @@ RUN dotnet publish cartservice.csproj \
     -c release \
     -o /cartservice
 
+# Stage to fetch updated system packages for Ubuntu Noble
+FROM ubuntu:24.04 AS upgraded-root
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # https://mcr.microsoft.com/product/dotnet/runtime-deps
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb8d929183cfe4c6dd9994abba92a2639dd2dbaf06005379f815991604
+
+# Copy upgraded OS packages from Ubuntu stage to patch OS vulnerabilities
+COPY --from=upgraded-root /usr /usr
+COPY --from=upgraded-root /lib /lib
 
 WORKDIR /app
 COPY --from=builder /cartservice .
