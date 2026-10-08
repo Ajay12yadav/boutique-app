@@ -16,13 +16,13 @@ def ENABLED = [
   // 'frontend',
   // 'checkoutservice',
   // 'productcatalogservice',
-  // 'shippingservice',
+     'shippingservice',
   // 'currencyservice',
   // 'paymentservice',
   // 'emailservice',
   // 'recommendationservice',
   // 'adservice',
-  'cartservice'
+  // 'cartservice'
 ]
 
 pipeline {
@@ -264,7 +264,19 @@ pipeline {
               sleep 3
             done
           '''
+          sh '''
+  cd gitops-tmp
+  git diff --stat
+  git commit -am "deploy(dev): ${PUSHED} -> ${TAG} (build ${BUILD_NUMBER})" || echo "nothing to commit"
+  ok=0
+  for i in 1 2 3; do
+    if git pull --rebase origin main && git push origin main; then ok=1; break; fi
+    sleep 3
+  done
+  if [ "$ok" != "1" ]; then echo "GitOps push failed after 3 attempts"; exit 1; fi
+'''
         }
+          
       }
     }
 

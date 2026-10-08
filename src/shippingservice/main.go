@@ -183,3 +183,4 @@ func initProfiling(service, version string) {
 }
 // ci-test: verifying path-based build
 // ci-test: gitops update
+// ci-test: gitops push
