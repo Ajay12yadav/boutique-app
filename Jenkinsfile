@@ -20,9 +20,9 @@ def ENABLED = [
     'currencyservice',
     'paymentservice',
     'emailservice',
-    'recommendationservice',
-    'adservice',
-    'cartservice'
+    // 'recommendationservice',
+    // 'adservice',
+    // 'cartservice'
 ]
 
 pipeline {
