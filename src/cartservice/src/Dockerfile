@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
 ARG BUILDPLATFORM=linux/amd64
 
-# https://mcr.microsoft.com/product/dotnet/sdk
+# Build stage
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100-noble@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS builder
 ARG TARGETARCH=amd64
 WORKDIR /app
@@ -32,19 +31,8 @@ RUN dotnet publish cartservice.csproj \
     -c release \
     -o /cartservice
 
-# Stage to fetch updated system packages for Ubuntu 24.04
-FROM ubuntu:24.04 AS upgraded-root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl3t64 openssl && \
-    apt-get upgrade -y && \
-    rm -rf /var/lib/apt/lists/*
-
-# https://mcr.microsoft.com/product/dotnet/runtime-deps
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled
-
-# Copy upgraded OpenSSL libraries to resolve security vulnerabilities
-COPY --from=upgraded-root /usr/lib /usr/lib
-COPY --from=upgraded-root /lib /lib
+# Runtime stage: chiseled (minimal, non-root), floating patch tag so OS fixes arrive on rebuild
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled
 
 WORKDIR /app
 COPY --from=builder /cartservice .
