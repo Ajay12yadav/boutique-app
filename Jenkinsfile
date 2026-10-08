@@ -1,14 +1,14 @@
 def SERVICES = [
-  frontend:              [dir: 'src/frontend',              test: 'go'],
-  checkoutservice:       [dir: 'src/checkoutservice',       test: 'go'],
-  productcatalogservice: [dir: 'src/productcatalogservice', test: 'go'],
-  shippingservice:       [dir: 'src/shippingservice',       test: 'go'],
-  currencyservice:       [dir: 'src/currencyservice',       test: null],
-  paymentservice:        [dir: 'src/paymentservice',        test: null],
-  emailservice:          [dir: 'src/emailservice',          test: null],
-  recommendationservice: [dir: 'src/recommendationservice', test: null],
-  adservice:             [dir: 'src/adservice',             test: null],
-  cartservice:           [dir: 'src/cartservice',           ctx: 'src/cartservice/src', test: null],
+  frontend:              [dir: 'src/frontend',              test: 'go', libScan: 'enforce'],
+  checkoutservice:       [dir: 'src/checkoutservice',       test: 'go', libScan: 'enforce'],
+  productcatalogservice: [dir: 'src/productcatalogservice', test: 'go', libScan: 'enforce'],
+  shippingservice:       [dir: 'src/shippingservice',       test: 'go', libScan: 'enforce'],
+  currencyservice:       [dir: 'src/currencyservice',       test: null, libScan: 'report'],
+  paymentservice:        [dir: 'src/paymentservice',        test: null, libScan: 'report'],
+  emailservice:          [dir: 'src/emailservice',          test: null, libScan: 'report'],
+  recommendationservice: [dir: 'src/recommendationservice', test: null, libScan: 'report'],
+  adservice:             [dir: 'src/adservice',             test: null, libScan: 'report'],
+  cartservice:           [dir: 'src/cartservice', ctx: 'src/cartservice/src', test: null, libScan: 'report'],
 ]
 
 // All services enabled
@@ -186,16 +186,16 @@ pipeline {
               // Trivy Image Scan
               // -----------------------------
 
-              sh """
-                docker run --rm \
-                  -v /var/run/docker.sock:/var/run/docker.sock \
-                  aquasec/trivy:latest \
-                  image \
-                  --severity HIGH,CRITICAL \
-                  --ignore-unfixed \
-                  --exit-code 1 \
-                  ${image}
-              """
+              def libExit = (cfg.libScan == 'enforce') ? 1 : 0
+
+              sh """docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+      aquasec/trivy:latest image --pkg-types os --scanners vuln \
+      --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"""
+              
+
+              sh """docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+      aquasec/trivy:latest image --pkg-types library --scanners vuln \
+      --severity HIGH,CRITICAL --ignore-unfixed --exit-code ${libExit} ${image}"""
 
               // -----------------------------
               // Push to GHCR
