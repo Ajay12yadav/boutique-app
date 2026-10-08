@@ -188,14 +188,13 @@ pipeline {
 
               def libExit = (cfg.libScan == 'enforce') ? 1 : 0
 
-              sh """docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-      aquasec/trivy:latest image --pkg-types os --scanners vuln \
-      --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"""
-              
+              def trivyBase = "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ aquasec/trivy:latest image --skip-db-update --skip-java-db-update --timeout 10m"
 
-              sh """docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-      aquasec/trivy:latest image --pkg-types library --scanners vuln \
-      --severity HIGH,CRITICAL --ignore-unfixed --exit-code ${libExit} ${image}"""
+              sh "${trivyBase} --pkg-types os --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${image}"
+
+              sh "${trivyBase} --pkg-types library --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code ${libExit} ${image}"
+
+              
 
               // -----------------------------
               // Push to GHCR
